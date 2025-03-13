@@ -6,13 +6,12 @@ services:
     container_name: nextjs-static-nginx
     restart: always
     ports:
-      - "80:80"  # Exposes port 80 to the host
+      - "80:80"  # Expose port 80 to the host
     volumes:
-      - ./_next/static:/usr/share/nginx/html/_next/static
-      - ./404.html:/usr/share/nginx/html/404.html
-      - ./index.html:/usr/share/nginx/html/index.html
-      - ./logo.svg:/usr/share/nginx/html/logo.svg
-      - ./next.svg:/usr/share/nginx/html/next.svg
-      - ./vercel.svg:/usr/share/nginx/html/vercel.svg
-      - ./nginx.conf:/etc/nginx/conf.d/default.conf # Custom Nginx configuration
-
+      - ./_next:/usr/share/nginx/html/_next:ro # Map the entire _next folder
+      - ./404.html:/usr/share/nginx/html/404.html:ro
+      - ./index.html:/usr/share/nginx/html/index.html:ro
+      - ./logo.svg:/usr/share/nginx/html/logo.svg:ro
+      - ./next.svg:/usr/share/nginx/html/next.svg:ro
+      - ./vercel.svg:/usr/share/nginx/html/vercel.svg:ro
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro # Map config properly
