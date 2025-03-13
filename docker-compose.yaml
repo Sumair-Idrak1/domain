@@ -1,0 +1,18 @@
+version: '3.8'
+
+services:
+  nginx:
+    image: nginx:alpine
+    container_name: nextjs-static-nginx
+    restart: always
+    ports:
+      - "80:80"  # Exposes port 80 to the host
+    volumes:
+      - ./_next/static:/usr/share/nginx/html/_next/static
+      - ./404.html:/usr/share/nginx/html/404.html
+      - ./index.html:/usr/share/nginx/html/index.html
+      - ./logo.svg:/usr/share/nginx/html/logo.svg
+      - ./next.svg:/usr/share/nginx/html/next.svg
+      - ./vercel.svg:/usr/share/nginx/html/vercel.svg
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf # Custom Nginx configuration
+
