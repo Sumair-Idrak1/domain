@@ -1,0 +1,72 @@
+name: Auto Create & Deploy to Coolify
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Install jq
+        run: sudo apt-get install -y jq
+
+      - name: Generate Unique Subdomain
+        run: echo "SUBDOMAIN=app-$(date +%s).yourdomain.com" >> $GITHUB_ENV
+
+      - name: Create Project in Coolify
+        env:
+          COOLIFY_API_TOKEN: ${{ secrets.COOLIFY_API_TOKEN }}
+          COOLIFY_SERVER: "https://your-coolify-instance.com"
+          REPO_URL: "https://github.com/YOUR_GITHUB_USERNAME/YOUR_REPO.git"
+        run: |
+          RESPONSE=$(curl -X POST "$COOLIFY_SERVER/api/v1/projects" \
+            -H "Authorization: Bearer $COOLIFY_API_TOKEN" \
+            -H "Content-Type: application/json" \
+            --data '{
+              "name": "coolify-auto-project-'$(date +%s)'",
+              "repository": "'"$REPO_URL"'",
+              "branch": "main",
+              "build_pack": "static"
+            }')
+
+          PROJECT_ID=$(echo $RESPONSE | jq -r '.id')
+          echo "PROJECT_ID=$PROJECT_ID" >> $GITHUB_ENV
+
+      - name: Configure Nginx Deployment
+        env:
+          COOLIFY_API_TOKEN: ${{ secrets.COOLIFY_API_TOKEN }}
+          COOLIFY_SERVER: "https://your-coolify-instance.com"
+          PROJECT_ID: ${{ env.PROJECT_ID }}
+          SUBDOMAIN: ${{ env.SUBDOMAIN }}
+        run: |
+          curl -X PATCH "$COOLIFY_SERVER/api/v1/projects/$PROJECT_ID" \
+            -H "Authorization: Bearer $COOLIFY_API_TOKEN" \
+            -H "Content-Type: application/json" \
+            --data '{
+              "webservice": {
+                "type": "nginx",
+                "subdomain": "'"$SUBDOMAIN"'"
+              }
+            }'
+
+      - name: Deploy Project
+        env:
+          COOLIFY_API_TOKEN: ${{ secrets.COOLIFY_API_TOKEN }}
+          COOLIFY_SERVER: "https://your-coolify-instance.com"
+          PROJECT_ID: ${{ env.PROJECT_ID }}
+        run: |
+          curl -X POST "$COOLIFY_SERVER/api/v1/deployments" \
+            -H "Authorization: Bearer $COOLIFY_API_TOKEN" \
+            -H "Content-Type: application/json" \
+            --data '{
+              "project_id": "'"$PROJECT_ID"'"
+            }'
+
+      - name: Output Deployment URL
+        run: echo "Project deployed at https://$SUBDOMAIN"
