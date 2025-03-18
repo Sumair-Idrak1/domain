@@ -46,6 +46,33 @@ jobs:
           fi
 
           echo "PROJECT_ID=$PROJECT_ID" >> $GITHUB_ENV
+          
+      - name: Create Service in Coolify
+        env:
+          COOLIFY_API_TOKEN: ${{ secrets.COOLIFY_API_TOKEN }}
+          COOLIFY_SERVER: "https://coolify.bot.idrakai.com"
+          PROJECT_ID: ${{ env.PROJECT_ID }}
+        run: |
+          RESPONSE=$(curl -s -X POST "$COOLIFY_SERVER/api/v1/services" \
+            -H "Authorization: Bearer $COOLIFY_API_TOKEN" \
+            -H "Content-Type: application/json" \
+            --data '{
+              "project_id": "'$PROJECT_ID'",
+              "name": "my-service-'$(date +%s)'",
+              "type": "git",
+              "repository": "https://github.com/YOUR_GITHUB_REPO.git",
+              "branch": "main"
+            }')
+
+          echo "Service Creation Response: $RESPONSE"
+          SERVICE_ID=$(echo "$RESPONSE" | jq -r '.uuid')
+
+          if [ "$SERVICE_ID" == "null" ] || [ -z "$SERVICE_ID" ]; then
+            echo "Error: Failed to create service."
+            exit 1
+          fi
+
+          echo "SERVICE_ID=$SERVICE_ID" >> $GITHUB_ENV
 
       - name: Deploy Project
         env:
