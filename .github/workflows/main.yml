@@ -30,30 +30,25 @@ jobs:
             -H "Content-Type: application/json" \
             --data '{
               "name": "coolify-auto-project-'$(date +%s)'",
-              "repository": "'"$REPO_URL"'",
-              "branch": "main",
+              "git": {
+                "repository": "'"$REPO_URL"'",
+                "branch": "main"
+              },
               "build_pack": "static"
             }')
 
           PROJECT_ID=$(echo $RESPONSE | jq -r '.id')
+
+          if [ "$PROJECT_ID" == "null" ] || [ -z "$PROJECT_ID" ]; then
+            echo "Error: Failed to retrieve PROJECT_ID."
+            echo "API Response: $RESPONSE"
+            exit 1
+          fi
+
           echo "PROJECT_ID=$PROJECT_ID" >> $GITHUB_ENV
 
-      - name: Configure Nginx Deployment
-        env:
-          COOLIFY_API_TOKEN: ${{ secrets.COOLIFY_API_TOKEN }}
-          COOLIFY_SERVER: "https://coolify.bot.idrakai.com"
-          PROJECT_ID: ${{ env.PROJECT_ID }}
-          SUBDOMAIN: ${{ env.SUBDOMAIN }}
-        run: |
-          curl -X PATCH "$COOLIFY_SERVER/api/v1/projects/$PROJECT_ID" \
-            -H "Authorization: Bearer $COOLIFY_API_TOKEN" \
-            -H "Content-Type: application/json" \
-            --data '{
-              "webservice": {
-                "type": "nginx",
-                "subdomain": "'"$SUBDOMAIN"'"
-              }
-            }'
+      - name: Wait for Coolify to Register Project
+        run: sleep 10
 
       - name: Deploy Project
         env:
@@ -61,12 +56,11 @@ jobs:
           COOLIFY_SERVER: "https://coolify.bot.idrakai.com"
           PROJECT_ID: ${{ env.PROJECT_ID }}
         run: |
-          curl -X POST "$COOLIFY_SERVER/api/v1/deployments" \
+          DEPLOY_RESPONSE=$(curl -X POST "$COOLIFY_SERVER/api/v1/projects/$PROJECT_ID/deploy" \
             -H "Authorization: Bearer $COOLIFY_API_TOKEN" \
-            -H "Content-Type: application/json" \
-            --data '{
-              "project_id": "'"$PROJECT_ID"'"
-            }'
+            -H "Content-Type: application/json")
+
+          echo "Deployment response: $DEPLOY_RESPONSE"
 
       - name: Output Deployment URL
         run: echo "Project deployed at https://$SUBDOMAIN"
