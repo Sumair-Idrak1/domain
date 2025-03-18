@@ -41,7 +41,7 @@ jobs:
       - name: Configure Nginx Deployment
         env:
           COOLIFY_API_TOKEN: ${{ secrets.COOLIFY_API_TOKEN }}
-          COOLIFY_SERVER: "https://your-coolify-instance.com"
+          COOLIFY_SERVER: "https://coolify.bot.idrakai.com"
           PROJECT_ID: ${{ env.PROJECT_ID }}
           SUBDOMAIN: ${{ env.SUBDOMAIN }}
         run: |
@@ -58,7 +58,7 @@ jobs:
       - name: Deploy Project
         env:
           COOLIFY_API_TOKEN: ${{ secrets.COOLIFY_API_TOKEN }}
-          COOLIFY_SERVER: "https://your-coolify-instance.com"
+          COOLIFY_SERVER: "https://coolify.bot.idrakai.com"
           PROJECT_ID: ${{ env.PROJECT_ID }}
         run: |
           curl -X POST "$COOLIFY_SERVER/api/v1/deployments" \
