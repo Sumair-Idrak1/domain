@@ -37,64 +37,67 @@ jobs:
             --data '{"name": "coolify-auto-project-'$(date +%s)'"}')
           
           echo "API Response: $RESPONSE"
+          PROJECT_UUID=$(echo "$RESPONSE" | jq -r '.uuid')
+          
+          if [ "$PROJECT_UUID" == "null" ] || [ -z "$PROJECT_UUID" ]; then
+            echo "Error: Failed to retrieve PROJECT_UUID."
+            exit 1
+          fi
+          
+          echo "PROJECT_UUID=$PROJECT_UUID" >> $GITHUB_ENV
 
-          PROJECT_ID=$(echo "$RESPONSE" | jq -r '.uuid')  # Extract uuid instead of id
+      - name: Fetch Server UUID
+        env:
+          COOLIFY_API_TOKEN: ${{ secrets.COOLIFY_API_TOKEN }}
+          COOLIFY_SERVER: "https://coolify.bot.idrakai.com"
+        run: |
+          SERVER_RESPONSE=$(curl -s -X GET "$COOLIFY_SERVER/api/v1/servers" \
+            -H "Authorization: Bearer $COOLIFY_API_TOKEN")
 
-          if [ "$PROJECT_ID" == "null" ] || [ -z "$PROJECT_ID" ]; then
-            echo "Error: Failed to retrieve PROJECT_ID."
+          echo "Server Response: $SERVER_RESPONSE"
+          SERVER_UUID=$(echo "$SERVER_RESPONSE" | jq -r '.[0].uuid')
+
+          if [ "$SERVER_UUID" == "null" ] || [ -z "$SERVER_UUID" ]; then
+            echo "Error: Failed to retrieve SERVER_UUID."
             exit 1
           fi
 
-          echo "PROJECT_ID=$PROJECT_ID" >> $GITHUB_ENV
-          
+          echo "SERVER_UUID=$SERVER_UUID" >> $GITHUB_ENV
+
       - name: Create Service in Coolify
         env:
           COOLIFY_API_TOKEN: ${{ secrets.COOLIFY_API_TOKEN }}
           COOLIFY_SERVER: "https://coolify.bot.idrakai.com"
-          PROJECT_ID: ${{ env.PROJECT_ID }}
+          PROJECT_UUID: ${{ env.PROJECT_UUID }}
+          SERVER_UUID: ${{ env.SERVER_UUID }}
         run: |
           RESPONSE=$(curl -s -X POST "$COOLIFY_SERVER/api/v1/services" \
             -H "Authorization: Bearer $COOLIFY_API_TOKEN" \
             -H "Content-Type: application/json" \
             --data '{
-              "project_id": "'$PROJECT_ID'",
-              "name": "my-service-'$(date +%s)'",
+              "project_uuid": "'$PROJECT_UUID'",
+              "server_uuid": "'$SERVER_UUID'",
               "type": "git",
-              "repository": "https://github.com/YOUR_GITHUB_REPO.git",
-              "branch": "main"
+              "name": "my-service-'$(date +%s)'"
             }')
 
           echo "Service Creation Response: $RESPONSE"
-          SERVICE_ID=$(echo "$RESPONSE" | jq -r '.uuid')
+          SERVICE_UUID=$(echo "$RESPONSE" | jq -r '.uuid')
 
-          if [ "$SERVICE_ID" == "null" ] || [ -z "$SERVICE_ID" ]; then
+          if [ "$SERVICE_UUID" == "null" ] || [ -z "$SERVICE_UUID" ]; then
             echo "Error: Failed to create service."
             exit 1
           fi
 
-          echo "SERVICE_ID=$SERVICE_ID" >> $GITHUB_ENV
+          echo "SERVICE_UUID=$SERVICE_UUID" >> $GITHUB_ENV
 
-      - name: Deploy Project
+      - name: Deploy Service in Coolify
         env:
           COOLIFY_API_TOKEN: ${{ secrets.COOLIFY_API_TOKEN }}
           COOLIFY_SERVER: "https://coolify.bot.idrakai.com"
-          PROJECT_ID: ${{ env.PROJECT_ID }}
+          SERVICE_UUID: ${{ env.SERVICE_UUID }}
         run: |
-          echo "Fetching project details to find linked services..."
-          PROJECT_DETAILS=$(curl -s -X GET "$COOLIFY_SERVER/api/v1/projects/$PROJECT_ID" \
-            -H "Authorization: Bearer $COOLIFY_API_TOKEN")
-      
-          echo "Project Details: $PROJECT_DETAILS"
-      
-          SERVICE_ID=$(echo "$PROJECT_DETAILS" | jq -r '.services[0].uuid')
-      
-          if [ "$SERVICE_ID" == "null" ] || [ -z "$SERVICE_ID" ]; then
-            echo "Error: No service linked to project. Deployment cannot proceed."
-            exit 1
-          fi
-      
-          echo "Deploying Service ID: $SERVICE_ID"
-          DEPLOY_RESPONSE=$(curl -s -X POST "$COOLIFY_SERVER/api/v1/services/$SERVICE_ID/deploy" \
+          DEPLOY_RESPONSE=$(curl -s -X POST "$COOLIFY_SERVER/api/v1/services/$SERVICE_UUID/deploy" \
             -H "Authorization: Bearer $COOLIFY_API_TOKEN" \
             -H "Content-Type: application/json")
 
