@@ -48,16 +48,31 @@ jobs:
           echo "PROJECT_ID=$PROJECT_ID" >> $GITHUB_ENV
 
       - name: Deploy Project
-        env:
-          COOLIFY_API_TOKEN: ${{ secrets.COOLIFY_API_TOKEN }}
-          COOLIFY_SERVER: "https://coolify.bot.idrakai.com"
-          PROJECT_ID: ${{ env.PROJECT_ID }}
-        run: |
-          DEPLOY_RESPONSE=$(curl -s -X POST "$COOLIFY_SERVER/api/v1/projects/$PROJECT_ID/deploy" \
-            -H "Authorization: Bearer $COOLIFY_API_TOKEN" \
-            -H "Content-Type: application/json")
+          env:
+            COOLIFY_API_TOKEN: ${{ secrets.COOLIFY_API_TOKEN }}
+            COOLIFY_SERVER: "https://coolify.bot.idrakai.com"
+            PROJECT_ID: ${{ env.PROJECT_ID }}
+          run: |
+            echo "Fetching project details to find linked services..."
+            PROJECT_DETAILS=$(curl -s -X GET "$COOLIFY_SERVER/api/v1/projects/$PROJECT_ID" \
+              -H "Authorization: Bearer $COOLIFY_API_TOKEN")
+        
+            echo "Project Details: $PROJECT_DETAILS"
+        
+            SERVICE_ID=$(echo "$PROJECT_DETAILS" | jq -r '.services[0].uuid')
+        
+            if [ "$SERVICE_ID" == "null" ] || [ -z "$SERVICE_ID" ]; then
+              echo "Error: No service linked to project. Deployment cannot proceed."
+              exit 1
+            fi
+        
+            echo "Deploying Service ID: $SERVICE_ID"
+            DEPLOY_RESPONSE=$(curl -s -X POST "$COOLIFY_SERVER/api/v1/services/$SERVICE_ID/deploy" \
+              -H "Authorization: Bearer $COOLIFY_API_TOKEN" \
+              -H "Content-Type: application/json")
 
-          echo "Deployment Response: $DEPLOY_RESPONSE"
+    echo "Deployment Response: $DEPLOY_RESPONSE"
+
 
       - name: Output Deployment URL
         run: echo "Project deployed at https://$SUBDOMAIN"
