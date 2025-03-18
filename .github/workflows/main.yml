@@ -19,28 +19,33 @@ jobs:
       - name: Generate Unique Subdomain
         run: echo "SUBDOMAIN=app-$(date +%s).bot.idrakai.com" >> $GITHUB_ENV
 
+      - name: Verify Coolify API Token
+        run: |
+          if [ -z "${{ secrets.COOLIFY_API_TOKEN }}" ]; then
+            echo "Error: COOLIFY_API_TOKEN is not set."
+            exit 1
+          fi
+
       - name: Create Project in Coolify
         env:
           COOLIFY_API_TOKEN: ${{ secrets.COOLIFY_API_TOKEN }}
           COOLIFY_SERVER: "https://coolify.bot.idrakai.com"
         run: |
-          RESPONSE=$(curl -X POST "$COOLIFY_SERVER/api/v1/projects" \
+          RESPONSE=$(curl -s -X POST "$COOLIFY_SERVER/api/v1/projects" \
             -H "Authorization: Bearer $COOLIFY_API_TOKEN" \
             -H "Content-Type: application/json" \
-            --data '{
-              "name": "coolify-auto-project-'$(date +%s)'"
-            }')
+            --data '{"name": "coolify-auto-project-'$(date +%s)'"}')
 
-          PROJECT_ID=$(echo $RESPONSE | jq -r '.uuid')  # Extract uuid instead of id
+          echo "API Response: $RESPONSE"
+
+          PROJECT_ID=$(echo "$RESPONSE" | jq -r '.uuid')  # Extract uuid instead of id
 
           if [ "$PROJECT_ID" == "null" ] || [ -z "$PROJECT_ID" ]; then
             echo "Error: Failed to retrieve PROJECT_ID."
-            echo "API Response: $RESPONSE"
             exit 1
           fi
 
           echo "PROJECT_ID=$PROJECT_ID" >> $GITHUB_ENV
-
 
       - name: Deploy Project
         env:
@@ -48,11 +53,11 @@ jobs:
           COOLIFY_SERVER: "https://coolify.bot.idrakai.com"
           PROJECT_ID: ${{ env.PROJECT_ID }}
         run: |
-          DEPLOY_RESPONSE=$(curl -X POST "$COOLIFY_SERVER/api/v1/projects/$PROJECT_ID/deploy" \
+          DEPLOY_RESPONSE=$(curl -s -X POST "$COOLIFY_SERVER/api/v1/projects/$PROJECT_ID/deploy" \
             -H "Authorization: Bearer $COOLIFY_API_TOKEN" \
             -H "Content-Type: application/json")
 
-          echo "Deployment response: $DEPLOY_RESPONSE"
+          echo "Deployment Response: $DEPLOY_RESPONSE"
 
       - name: Output Deployment URL
         run: echo "Project deployed at https://$SUBDOMAIN"
