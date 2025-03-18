@@ -32,11 +32,9 @@ jobs:
           COOLIFY_SERVER: "https://coolify.bot.idrakai.com"
         run: |
           PROJECT_RESPONSE=$(curl -s -X GET "$COOLIFY_SERVER/api/v1/projects" -H "Authorization: Bearer $COOLIFY_API_TOKEN")
-
           echo "Projects API Response: $PROJECT_RESPONSE"
-
           EXISTING_PROJECT_UUID=$(echo "$PROJECT_RESPONSE" | jq -r 'map(select(.name | startswith("coolify-auto-project"))) | .[0].uuid')
-
+          
           if [[ -n "$EXISTING_PROJECT_UUID" && "$EXISTING_PROJECT_UUID" != "null" ]]; then
             echo "Project already exists: $EXISTING_PROJECT_UUID"
             echo "PROJECT_UUID=$EXISTING_PROJECT_UUID" >> $GITHUB_ENV
@@ -45,16 +43,13 @@ jobs:
               -H "Authorization: Bearer $COOLIFY_API_TOKEN" \
               -H "Content-Type: application/json" \
               --data '{"name": "coolify-auto-project-'$(date +%s)'"}')
-
             echo "Create Project Response: $RESPONSE"
-
             PROJECT_UUID=$(echo "$RESPONSE" | jq -r '.uuid')
-
+            
             if [[ -z "$PROJECT_UUID" || "$PROJECT_UUID" == "null" ]]; then
               echo "Error: Failed to create or retrieve PROJECT_UUID."
               exit 1
             fi
-
             echo "PROJECT_UUID=$PROJECT_UUID" >> $GITHUB_ENV
           fi
 
@@ -68,13 +63,11 @@ jobs:
             echo "Error: PROJECT_UUID is not set."
             exit 1
           fi
-
           PROJECT_CHECK=$(curl -s -X GET "$COOLIFY_SERVER/api/v1/projects/$PROJECT_UUID" -H "Authorization: Bearer $COOLIFY_API_TOKEN")
-
           echo "Environment API Response: $PROJECT_CHECK"
-
-          EXISTING_ENV_UUID=$(echo "$PROJECT_CHECK" | jq -r '.environments[]? | select(.name=="production") | .uuid')
-
+          
+          EXISTING_ENV_UUID=$(echo "$PROJECT_CHECK" | jq -r '.environments | map(select(.name=="production")) | .[0].uuid')
+          
           if [[ -n "$EXISTING_ENV_UUID" && "$EXISTING_ENV_UUID" != "null" ]]; then
             echo "Using existing environment: $EXISTING_ENV_UUID"
             echo "ENVIRONMENT_UUID=$EXISTING_ENV_UUID" >> $GITHUB_ENV
@@ -83,17 +76,22 @@ jobs:
               -H "Authorization: Bearer $COOLIFY_API_TOKEN" \
               -H "Content-Type: application/json" \
               --data '{"name": "production"}')
-
             echo "Create Environment Response: $ENV_RESPONSE"
-
             ENVIRONMENT_UUID=$(echo "$ENV_RESPONSE" | jq -r '.uuid')
-
+            
             if [[ -z "$ENVIRONMENT_UUID" || "$ENVIRONMENT_UUID" == "null" ]]; then
               echo "Error: Failed to create or retrieve ENVIRONMENT_UUID."
               exit 1
             fi
-
             echo "ENVIRONMENT_UUID=$ENVIRONMENT_UUID" >> $GITHUB_ENV
+          fi
+
+      - name: Debug Environment UUID
+        run: |
+          echo "ENVIRONMENT_UUID=${{ env.ENVIRONMENT_UUID }}"
+          if [ -z "${{ env.ENVIRONMENT_UUID }}" ]; then
+            echo "Error: ENVIRONMENT_UUID is empty."
+            exit 1
           fi
 
       - name: Fetch Server UUID
@@ -102,16 +100,13 @@ jobs:
           COOLIFY_SERVER: "https://coolify.bot.idrakai.com"
         run: |
           SERVER_RESPONSE=$(curl -s -X GET "$COOLIFY_SERVER/api/v1/servers" -H "Authorization: Bearer $COOLIFY_API_TOKEN")
-
           echo "Server API Response: $SERVER_RESPONSE"
-
           SERVER_UUID=$(echo "$SERVER_RESPONSE" | jq -r '.[0].uuid')
 
           if [[ -z "$SERVER_UUID" || "$SERVER_UUID" == "null" ]]; then
             echo "Error: Failed to retrieve SERVER_UUID."
             exit 1
           fi
-
           echo "SERVER_UUID=$SERVER_UUID" >> $GITHUB_ENV
 
       - name: Check or Create Service
@@ -126,9 +121,7 @@ jobs:
             echo "Error: ENVIRONMENT_UUID is not set."
             exit 1
           fi
-
           SERVICES_RESPONSE=$(curl -s -X GET "$COOLIFY_SERVER/api/v1/projects/$PROJECT_UUID/services" -H "Authorization: Bearer $COOLIFY_API_TOKEN")
-
           echo "Services API Response: $SERVICES_RESPONSE"
 
           if echo "$SERVICES_RESPONSE" | jq -e 'type == "array"' > /dev/null; then
@@ -152,16 +145,13 @@ jobs:
                 "type": "git",
                 "name": "my-service-'$(date +%s)'"
               }')
-
             echo "Create Service Response: $RESPONSE"
-
             SERVICE_UUID=$(echo "$RESPONSE" | jq -r '.uuid')
 
             if [[ -z "$SERVICE_UUID" || "$SERVICE_UUID" == "null" ]]; then
               echo "Error: Failed to create service."
               exit 1
             fi
-
             echo "SERVICE_UUID=$SERVICE_UUID" >> $GITHUB_ENV
           fi
 
