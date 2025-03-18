@@ -71,30 +71,52 @@ jobs:
           ENVIRONMENT_UUID: ${{ env.ENVIRONMENT_UUID }}
         run: |
           SERVICE_NAME="my-service"
-          SERVICES_RESPONSE=$(curl -s -X GET "$COOLIFY_SERVER/api/v1/projects/$PROJECT_UUID/environments/$ENVIRONMENT_UUID/services" -H "Authorization: Bearer $COOLIFY_API_TOKEN")
           
+          # Fetch services
+          SERVICES_RESPONSE=$(curl -s -X GET "$COOLIFY_SERVER/api/v1/projects/$PROJECT_UUID/environments/$ENVIRONMENT_UUID/services" \
+            -H "Authorization: Bearer $COOLIFY_API_TOKEN")
+
           echo "Raw API Response: $SERVICES_RESPONSE"  # Debugging output
 
-          # Check if the response is valid JSON before parsing
-          if echo "$SERVICES_RESPONSE" | jq empty 2>/dev/null; then
-            SERVICE_UUID=$(echo "$SERVICES_RESPONSE" | jq -r ".[] | select(.name==\"$SERVICE_NAME\").uuid")
-          else
-            echo "Error: API returned invalid JSON!"
+          # Check if the response is valid JSON
+          if ! echo "$SERVICES_RESPONSE" | jq empty 2>/dev/null; then
+            echo "Error: API returned invalid JSON or an error response!"
             exit 1
           fi
-          
+
+          # Ensure the response is an array before filtering
+          if echo "$SERVICES_RESPONSE" | jq -e 'type=="array"' >/dev/null; then
+            SERVICE_UUID=$(echo "$SERVICES_RESPONSE" | jq -r ".[] | select(.name==\"$SERVICE_NAME\").uuid")
+          else
+            echo "Error: Expected an array but got something else."
+            exit 1
+          fi
+
+          # If no service exists, create one
           if [[ -z "$SERVICE_UUID" || "$SERVICE_UUID" == "null" ]]; then
-            echo "Creating new service..."
+            echo "Service not found. Creating a new service..."
             SERVICE_CREATE_RESPONSE=$(curl -s -X POST "$COOLIFY_SERVER/api/v1/projects/$PROJECT_UUID/environments/$ENVIRONMENT_UUID/services" \
               -H "Authorization: Bearer $COOLIFY_API_TOKEN" \
               -H "Content-Type: application/json" \
               --data '{"name": "'$SERVICE_NAME'", "type": "docker"}')
+
+            echo "Service Create Response: $SERVICE_CREATE_RESPONSE"
+
+            if ! echo "$SERVICE_CREATE_RESPONSE" | jq empty 2>/dev/null; then
+              echo "Error: Service creation failed, invalid JSON response!"
+              exit 1
+            fi
+
             SERVICE_UUID=$(echo "$SERVICE_CREATE_RESPONSE" | jq -r '.uuid')
+
+            if [[ -z "$SERVICE_UUID" || "$SERVICE_UUID" == "null" ]]; then
+              echo "Error: Service creation failed, UUID not found!"
+              exit 1
+            fi
           fi
-          
+
           echo "SERVICE_UUID=$SERVICE_UUID" >> $GITHUB_ENV
           echo "Using service UUID: $SERVICE_UUID"
-
 
       - name: Deploy Service
         env:
