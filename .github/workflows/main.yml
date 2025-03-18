@@ -23,18 +23,12 @@ jobs:
         env:
           COOLIFY_API_TOKEN: ${{ secrets.COOLIFY_API_TOKEN }}
           COOLIFY_SERVER: "https://coolify.bot.idrakai.com"
-          REPO_URL: "https://github.com/Sumair-Idrak1/domain.git"
         run: |
           RESPONSE=$(curl -X POST "$COOLIFY_SERVER/api/v1/projects" \
             -H "Authorization: Bearer $COOLIFY_API_TOKEN" \
             -H "Content-Type: application/json" \
             --data '{
-              "name": "coolify-auto-project-'$(date +%s)'",
-              "git": {
-                "repository": "'"$REPO_URL"'",
-                "branch": "main"
-              },
-              "build_pack": "static"
+              "name": "coolify-auto-project-'$(date +%s)'"
             }')
 
           PROJECT_ID=$(echo $RESPONSE | jq -r '.id')
@@ -46,9 +40,6 @@ jobs:
           fi
 
           echo "PROJECT_ID=$PROJECT_ID" >> $GITHUB_ENV
-
-      - name: Wait for Coolify to Register Project
-        run: sleep 10
 
       - name: Deploy Project
         env:
