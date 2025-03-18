@@ -26,58 +26,61 @@ jobs:
             exit 1
           fi
 
-      - name: Create Project in Coolify
+      - name: Check if Project Exists or Create One
         env:
           COOLIFY_API_TOKEN: ${{ secrets.COOLIFY_API_TOKEN }}
           COOLIFY_SERVER: "https://coolify.bot.idrakai.com"
         run: |
-          RESPONSE=$(curl -s -X POST "$COOLIFY_SERVER/api/v1/projects" \
-            -H "Authorization: Bearer $COOLIFY_API_TOKEN" \
-            -H "Content-Type: application/json" \
-            --data '{"name": "coolify-auto-project-'$(date +%s)'"}')
-          echo "API Response: $RESPONSE"
-          PROJECT_UUID=$(echo "$RESPONSE" | jq -r '.uuid')
-          if [ "$PROJECT_UUID" == "null" ] || [ -z "$PROJECT_UUID" ]; then
-            echo "Error: Failed to retrieve PROJECT_UUID."
-            exit 1
-          fi
-          echo "PROJECT_UUID=$PROJECT_UUID" >> $GITHUB_ENV
+          PROJECT_RESPONSE=$(curl -s -X GET "$COOLIFY_SERVER/api/v1/projects" \
+            -H "Authorization: Bearer $COOLIFY_API_TOKEN")
 
-      - name: Create Environment in Coolify
+          EXISTING_PROJECT_UUID=$(echo "$PROJECT_RESPONSE" | jq -r '.[] | select(.name | startswith("coolify-auto-project")) | .uuid')
+
+          if [ -n "$EXISTING_PROJECT_UUID" ]; then
+            echo "Project already exists: $EXISTING_PROJECT_UUID"
+            echo "PROJECT_UUID=$EXISTING_PROJECT_UUID" >> $GITHUB_ENV
+          else
+            RESPONSE=$(curl -s -X POST "$COOLIFY_SERVER/api/v1/projects" \
+              -H "Authorization: Bearer $COOLIFY_API_TOKEN" \
+              -H "Content-Type: application/json" \
+              --data '{"name": "coolify-auto-project-'$(date +%s)'"}')
+            PROJECT_UUID=$(echo "$RESPONSE" | jq -r '.uuid')
+
+            if [ "$PROJECT_UUID" == "null" ] || [ -z "$PROJECT_UUID" ]; then
+              echo "Error: Failed to create or retrieve PROJECT_UUID."
+              exit 1
+            fi
+            echo "PROJECT_UUID=$PROJECT_UUID" >> $GITHUB_ENV
+          fi
+
+      - name: Check or Create Environment
         env:
           COOLIFY_API_TOKEN: ${{ secrets.COOLIFY_API_TOKEN }}
           COOLIFY_SERVER: "https://coolify.bot.idrakai.com"
           PROJECT_UUID: ${{ env.PROJECT_UUID }}
         run: |
-          echo "Using PROJECT_UUID: $PROJECT_UUID"
-
-          # Check if project exists
           PROJECT_CHECK=$(curl -s -X GET "$COOLIFY_SERVER/api/v1/projects/$PROJECT_UUID" \
             -H "Authorization: Bearer $COOLIFY_API_TOKEN")
 
-          echo "Project Check Response: $PROJECT_CHECK"
+          EXISTING_ENV_UUID=$(echo "$PROJECT_CHECK" | jq -r '.environments[] | select(.name=="production") | .uuid')
 
-          if [[ "$PROJECT_CHECK" == *"Not found"* ]]; then
-            echo "Error: Project UUID $PROJECT_UUID does not exist in Coolify."
-            exit 1
+          if [ -n "$EXISTING_ENV_UUID" ]; then
+            echo "Using existing environment: $EXISTING_ENV_UUID"
+            echo "ENVIRONMENT_UUID=$EXISTING_ENV_UUID" >> $GITHUB_ENV
+          else
+            ENV_RESPONSE=$(curl -s -X POST "$COOLIFY_SERVER/api/v1/projects/$PROJECT_UUID/environments" \
+              -H "Authorization: Bearer $COOLIFY_API_TOKEN" \
+              -H "Content-Type: application/json" \
+              --data '{"name": "production"}')
+
+            ENVIRONMENT_UUID=$(echo "$ENV_RESPONSE" | jq -r '.uuid')
+
+            if [ "$ENVIRONMENT_UUID" == "null" ] || [ -z "$ENVIRONMENT_UUID" ]; then
+              echo "Error: Failed to create or retrieve ENVIRONMENT_UUID."
+              exit 1
+            fi
+            echo "ENVIRONMENT_UUID=$ENVIRONMENT_UUID" >> $GITHUB_ENV
           fi
-
-          ENV_RESPONSE=$(curl -s -X POST "$COOLIFY_SERVER/api/v1/projects/$PROJECT_UUID/environments" \
-            -H "Authorization: Bearer $COOLIFY_API_TOKEN" \
-            -H "Content-Type: application/json" \
-            --data '{"name": "production"}')
-
-          echo "Environment Creation Response: $ENV_RESPONSE"
-
-          ENVIRONMENT_UUID=$(echo "$ENV_RESPONSE" | jq -r '.uuid')
-
-          if [ "$ENVIRONMENT_UUID" == "null" ] || [ -z "$ENVIRONMENT_UUID" ]; then
-            echo "Error: Failed to retrieve ENVIRONMENT_UUID."
-            exit 1
-          fi
-          
-          echo "ENVIRONMENT_UUID=$ENVIRONMENT_UUID" >> $GITHUB_ENV
-
 
       - name: Fetch Server UUID
         env:
@@ -87,7 +90,6 @@ jobs:
           SERVER_RESPONSE=$(curl -s -X GET "$COOLIFY_SERVER/api/v1/servers" \
             -H "Authorization: Bearer $COOLIFY_API_TOKEN")
 
-          echo "Server Response: $SERVER_RESPONSE"
           SERVER_UUID=$(echo "$SERVER_RESPONSE" | jq -r '.[0].uuid')
 
           if [ "$SERVER_UUID" == "null" ] || [ -z "$SERVER_UUID" ]; then
@@ -97,7 +99,7 @@ jobs:
 
           echo "SERVER_UUID=$SERVER_UUID" >> $GITHUB_ENV
 
-      - name: Create Service in Coolify
+      - name: Check or Create Service
         env:
           COOLIFY_API_TOKEN: ${{ secrets.COOLIFY_API_TOKEN }}
           COOLIFY_SERVER: "https://coolify.bot.idrakai.com"
@@ -105,28 +107,37 @@ jobs:
           SERVER_UUID: ${{ env.SERVER_UUID }}
           ENVIRONMENT_UUID: ${{ env.ENVIRONMENT_UUID }}
         run: |
-          RESPONSE=$(curl -s -X POST "$COOLIFY_SERVER/api/v1/services" \
-            -H "Authorization: Bearer $COOLIFY_API_TOKEN" \
-            -H "Content-Type: application/json" \
-            --data '{
-              "project_uuid": "'$PROJECT_UUID'",
-              "server_uuid": "'$SERVER_UUID'",
-              "environment_uuid": "'$ENVIRONMENT_UUID'",
-              "type": "git",
-              "name": "my-service-'$(date +%s)'"
-            }')
+          SERVICES_RESPONSE=$(curl -s -X GET "$COOLIFY_SERVER/api/v1/projects/$PROJECT_UUID/services" \
+            -H "Authorization: Bearer $COOLIFY_API_TOKEN")
 
-          echo "Service Creation Response: $RESPONSE"
-          SERVICE_UUID=$(echo "$RESPONSE" | jq -r '.uuid')
+          EXISTING_SERVICE_UUID=$(echo "$SERVICES_RESPONSE" | jq -r '.[] | select(.name | startswith("my-service")) | .uuid')
 
-          if [ "$SERVICE_UUID" == "null" ] || [ -z "$SERVICE_UUID" ]; then
-            echo "Error: Failed to create service."
-            exit 1
+          if [ -n "$EXISTING_SERVICE_UUID" ]; then
+            echo "Using existing service: $EXISTING_SERVICE_UUID"
+            echo "SERVICE_UUID=$EXISTING_SERVICE_UUID" >> $GITHUB_ENV
+          else
+            RESPONSE=$(curl -s -X POST "$COOLIFY_SERVER/api/v1/services" \
+              -H "Authorization: Bearer $COOLIFY_API_TOKEN" \
+              -H "Content-Type: application/json" \
+              --data '{
+                "project_uuid": "'$PROJECT_UUID'",
+                "server_uuid": "'$SERVER_UUID'",
+                "environment_uuid": "'$ENVIRONMENT_UUID'",
+                "type": "git",
+                "name": "my-service-'$(date +%s)'"
+              }')
+
+            SERVICE_UUID=$(echo "$RESPONSE" | jq -r '.uuid')
+
+            if [ "$SERVICE_UUID" == "null" ] || [ -z "$SERVICE_UUID" ]; then
+              echo "Error: Failed to create service."
+              exit 1
+            fi
+
+            echo "SERVICE_UUID=$SERVICE_UUID" >> $GITHUB_ENV
           fi
 
-          echo "SERVICE_UUID=$SERVICE_UUID" >> $GITHUB_ENV
-
-      - name: Deploy Service in Coolify
+      - name: Deploy Service
         env:
           COOLIFY_API_TOKEN: ${{ secrets.COOLIFY_API_TOKEN }}
           COOLIFY_SERVER: "https://coolify.bot.idrakai.com"
