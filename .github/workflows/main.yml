@@ -49,6 +49,19 @@ jobs:
           COOLIFY_SERVER: "https://coolify.bot.idrakai.com"
           PROJECT_UUID: ${{ env.PROJECT_UUID }}
         run: |
+          echo "Using PROJECT_UUID: $PROJECT_UUID"
+
+          # Check if project exists
+          PROJECT_CHECK=$(curl -s -X GET "$COOLIFY_SERVER/api/v1/projects/$PROJECT_UUID" \
+            -H "Authorization: Bearer $COOLIFY_API_TOKEN")
+
+          echo "Project Check Response: $PROJECT_CHECK"
+
+          if [[ "$PROJECT_CHECK" == *"Not found"* ]]; then
+            echo "Error: Project UUID $PROJECT_UUID does not exist in Coolify."
+            exit 1
+          fi
+
           ENV_RESPONSE=$(curl -s -X POST "$COOLIFY_SERVER/api/v1/projects/$PROJECT_UUID/environments" \
             -H "Authorization: Bearer $COOLIFY_API_TOKEN" \
             -H "Content-Type: application/json" \
@@ -62,8 +75,8 @@ jobs:
             echo "Error: Failed to retrieve ENVIRONMENT_UUID."
             exit 1
           fi
+          
           echo "ENVIRONMENT_UUID=$ENVIRONMENT_UUID" >> $GITHUB_ENV
-
 
 
       - name: Fetch Server UUID
