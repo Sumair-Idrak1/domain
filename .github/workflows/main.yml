@@ -35,16 +35,26 @@ jobs:
             -H "Authorization: Bearer $COOLIFY_API_TOKEN" \
             -H "Content-Type: application/json" \
             --data '{"name": "coolify-auto-project-'$(date +%s)'"}')
-
           echo "API Response: $RESPONSE"
           PROJECT_UUID=$(echo "$RESPONSE" | jq -r '.uuid')
-
           if [ "$PROJECT_UUID" == "null" ] || [ -z "$PROJECT_UUID" ]; then
             echo "Error: Failed to retrieve PROJECT_UUID."
             exit 1
           fi
-
           echo "PROJECT_UUID=$PROJECT_UUID" >> $GITHUB_ENV
+
+      - name: Create Environment in Coolify
+        env:
+          COOLIFY_API_TOKEN: ${{ secrets.COOLIFY_API_TOKEN }}
+          COOLIFY_SERVER: "https://coolify.bot.idrakai.com"
+          PROJECT_UUID: ${{ env.PROJECT_UUID }}
+        run: |
+          ENV_RESPONSE=$(curl -s -X POST "$COOLIFY_SERVER/api/v1/projects/$PROJECT_UUID/environments" \
+            -H "Authorization: Bearer $COOLIFY_API_TOKEN" \
+            -H "Content-Type: application/json" \
+            --data '{"name": "production"}')
+          echo "Environment Creation Response: $ENV_RESPONSE"
+
 
       - name: Fetch Server UUID
         env:
@@ -72,16 +82,14 @@ jobs:
         run: |
           ENVIRONMENT_RESPONSE=$(curl -s -X GET "$COOLIFY_SERVER/api/v1/projects/$PROJECT_UUID/environments" \
             -H "Authorization: Bearer $COOLIFY_API_TOKEN")
-
           echo "Environment Response: $ENVIRONMENT_RESPONSE"
-          ENVIRONMENT_UUID=$(echo "$ENVIRONMENT_RESPONSE" | jq -r '.[0].uuid')
-
+          ENVIRONMENT_UUID=$(echo "$ENVIRONMENT_RESPONSE" | jq -r '.[] | select(.name=="production") | .uuid')
           if [ "$ENVIRONMENT_UUID" == "null" ] || [ -z "$ENVIRONMENT_UUID" ]; then
             echo "Error: Failed to retrieve ENVIRONMENT_UUID."
             exit 1
           fi
-
           echo "ENVIRONMENT_UUID=$ENVIRONMENT_UUID" >> $GITHUB_ENV
+
 
       - name: Create Service in Coolify
         env:
