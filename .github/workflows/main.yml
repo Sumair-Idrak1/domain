@@ -72,7 +72,16 @@ jobs:
         run: |
           SERVICE_NAME="my-service"
           SERVICES_RESPONSE=$(curl -s -X GET "$COOLIFY_SERVER/api/v1/projects/$PROJECT_UUID/environments/$ENVIRONMENT_UUID/services" -H "Authorization: Bearer $COOLIFY_API_TOKEN")
-          SERVICE_UUID=$(echo "$SERVICES_RESPONSE" | jq -r ".[] | select(.name==\"$SERVICE_NAME\").uuid")
+          
+          echo "Raw API Response: $SERVICES_RESPONSE"  # Debugging output
+
+          # Check if the response is valid JSON before parsing
+          if echo "$SERVICES_RESPONSE" | jq empty 2>/dev/null; then
+            SERVICE_UUID=$(echo "$SERVICES_RESPONSE" | jq -r ".[] | select(.name==\"$SERVICE_NAME\").uuid")
+          else
+            echo "Error: API returned invalid JSON!"
+            exit 1
+          fi
           
           if [[ -z "$SERVICE_UUID" || "$SERVICE_UUID" == "null" ]]; then
             echo "Creating new service..."
@@ -85,6 +94,7 @@ jobs:
           
           echo "SERVICE_UUID=$SERVICE_UUID" >> $GITHUB_ENV
           echo "Using service UUID: $SERVICE_UUID"
+
 
       - name: Deploy Service
         env:
