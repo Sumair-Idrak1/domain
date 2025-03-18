@@ -35,15 +35,15 @@ jobs:
             -H "Authorization: Bearer $COOLIFY_API_TOKEN" \
             -H "Content-Type: application/json" \
             --data '{"name": "coolify-auto-project-'$(date +%s)'"}')
-          
+
           echo "API Response: $RESPONSE"
           PROJECT_UUID=$(echo "$RESPONSE" | jq -r '.uuid')
-          
+
           if [ "$PROJECT_UUID" == "null" ] || [ -z "$PROJECT_UUID" ]; then
             echo "Error: Failed to retrieve PROJECT_UUID."
             exit 1
           fi
-          
+
           echo "PROJECT_UUID=$PROJECT_UUID" >> $GITHUB_ENV
 
       - name: Fetch Server UUID
@@ -64,12 +64,32 @@ jobs:
 
           echo "SERVER_UUID=$SERVER_UUID" >> $GITHUB_ENV
 
+      - name: Fetch Environment UUID
+        env:
+          COOLIFY_API_TOKEN: ${{ secrets.COOLIFY_API_TOKEN }}
+          COOLIFY_SERVER: "https://coolify.bot.idrakai.com"
+          PROJECT_UUID: ${{ env.PROJECT_UUID }}
+        run: |
+          ENVIRONMENT_RESPONSE=$(curl -s -X GET "$COOLIFY_SERVER/api/v1/projects/$PROJECT_UUID/environments" \
+            -H "Authorization: Bearer $COOLIFY_API_TOKEN")
+
+          echo "Environment Response: $ENVIRONMENT_RESPONSE"
+          ENVIRONMENT_UUID=$(echo "$ENVIRONMENT_RESPONSE" | jq -r '.[0].uuid')
+
+          if [ "$ENVIRONMENT_UUID" == "null" ] || [ -z "$ENVIRONMENT_UUID" ]; then
+            echo "Error: Failed to retrieve ENVIRONMENT_UUID."
+            exit 1
+          fi
+
+          echo "ENVIRONMENT_UUID=$ENVIRONMENT_UUID" >> $GITHUB_ENV
+
       - name: Create Service in Coolify
         env:
           COOLIFY_API_TOKEN: ${{ secrets.COOLIFY_API_TOKEN }}
           COOLIFY_SERVER: "https://coolify.bot.idrakai.com"
           PROJECT_UUID: ${{ env.PROJECT_UUID }}
           SERVER_UUID: ${{ env.SERVER_UUID }}
+          ENVIRONMENT_UUID: ${{ env.ENVIRONMENT_UUID }}
         run: |
           RESPONSE=$(curl -s -X POST "$COOLIFY_SERVER/api/v1/services" \
             -H "Authorization: Bearer $COOLIFY_API_TOKEN" \
@@ -77,6 +97,7 @@ jobs:
             --data '{
               "project_uuid": "'$PROJECT_UUID'",
               "server_uuid": "'$SERVER_UUID'",
+              "environment_uuid": "'$ENVIRONMENT_UUID'",
               "type": "git",
               "name": "my-service-'$(date +%s)'"
             }')
