@@ -31,7 +31,7 @@ jobs:
               "name": "coolify-auto-project-'$(date +%s)'"
             }')
 
-          PROJECT_ID=$(echo $RESPONSE | jq -r '.id')
+          PROJECT_ID=$(echo $RESPONSE | jq -r '.uuid')  # Extract uuid instead of id
 
           if [ "$PROJECT_ID" == "null" ] || [ -z "$PROJECT_ID" ]; then
             echo "Error: Failed to retrieve PROJECT_ID."
@@ -40,6 +40,7 @@ jobs:
           fi
 
           echo "PROJECT_ID=$PROJECT_ID" >> $GITHUB_ENV
+
 
       - name: Deploy Project
         env:
