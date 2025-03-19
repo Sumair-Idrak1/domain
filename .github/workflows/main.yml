@@ -1,4 +1,4 @@
-name: Deploy to Coolify
+name: Deploy to Server
 
 on:
   push:
@@ -9,127 +9,16 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout Code
+      - name: Checkout code
         uses: actions/checkout@v3
 
-      - name: Set Up Environment Variables
-        env:
-          COOLIFY_API_TOKEN: ${{ secrets.COOLIFY_API_TOKEN }}
-          COOLIFY_SERVER: "https://coolify.bot.idrakai.com"
-        run: |
-          echo "COOLIFY_API_TOKEN=${COOLIFY_API_TOKEN}" >> $GITHUB_ENV
-          echo "COOLIFY_SERVER=${COOLIFY_SERVER}" >> $GITHUB_ENV
-
-      - name: Get or Create Project
-        env:
-          COOLIFY_API_TOKEN: ${{ secrets.COOLIFY_API_TOKEN }}
-          COOLIFY_SERVER: "https://coolify.bot.idrakai.com"
-        run: |
-          PROJECT_NAME="MyCoolifyProject"
-          PROJECT_RESPONSE=$(curl -s -X GET "$COOLIFY_SERVER/api/v1/projects" -H "Authorization: Bearer $COOLIFY_API_TOKEN")
-          PROJECT_UUID=$(echo "$PROJECT_RESPONSE" | jq -r ".[] | select(.name==\"$PROJECT_NAME\").uuid")
-          
-          if [[ -z "$PROJECT_UUID" || "$PROJECT_UUID" == "null" ]]; then
-            echo "Creating new project..."
-            PROJECT_CREATE_RESPONSE=$(curl -s -X POST "$COOLIFY_SERVER/api/v1/projects" \
-              -H "Authorization: Bearer $COOLIFY_API_TOKEN" \
-              -H "Content-Type: application/json" \
-              --data '{"name": "'$PROJECT_NAME'"}')
-            PROJECT_UUID=$(echo "$PROJECT_CREATE_RESPONSE" | jq -r '.uuid')
-          fi
-          
-          echo "PROJECT_UUID=$PROJECT_UUID" >> $GITHUB_ENV
-          echo "Using project UUID: $PROJECT_UUID"
-
-      - name: Get or Create Environment
-        env:
-          COOLIFY_API_TOKEN: ${{ secrets.COOLIFY_API_TOKEN }}
-          COOLIFY_SERVER: "https://coolify.bot.idrakai.com"
-          PROJECT_UUID: ${{ env.PROJECT_UUID }}
-        run: |
-          ENV_NAME="production"
-          ENV_RESPONSE=$(curl -s -X GET "$COOLIFY_SERVER/api/v1/projects/$PROJECT_UUID" -H "Authorization: Bearer $COOLIFY_API_TOKEN")
-          ENVIRONMENT_UUID=$(echo "$ENV_RESPONSE" | jq -r ".environments | map(select(.name==\"$ENV_NAME\"))[0].uuid")
-          
-          if [[ -z "$ENVIRONMENT_UUID" || "$ENVIRONMENT_UUID" == "null" ]]; then
-            echo "Creating new environment..."
-            CREATE_ENV_RESPONSE=$(curl -s -X POST "$COOLIFY_SERVER/api/v1/projects/$PROJECT_UUID/environments" \
-              -H "Authorization: Bearer $COOLIFY_API_TOKEN" \
-              -H "Content-Type: application/json" \
-              --data '{"name": "'$ENV_NAME'"}')
-            ENVIRONMENT_UUID=$(echo "$CREATE_ENV_RESPONSE" | jq -r '.uuid')
-          fi
-          
-          echo "ENVIRONMENT_UUID=$ENVIRONMENT_UUID" >> $GITHUB_ENV
-          echo "Using environment UUID: $ENVIRONMENT_UUID"
-
-      - name: Get or Create Service
-        env:
-          COOLIFY_API_TOKEN: ${{ secrets.COOLIFY_API_TOKEN }}
-          COOLIFY_SERVER: "https://coolify.bot.idrakai.com"
-          PROJECT_UUID: ${{ env.PROJECT_UUID }}
-          ENVIRONMENT_UUID: ${{ env.ENVIRONMENT_UUID }}
-        run: |
-          SERVICE_NAME="my-service"
-          
-          # Fetch services
-          SERVICES_RESPONSE=$(curl -s -X GET "$COOLIFY_SERVER/api/v1/projects/$PROJECT_UUID/environments/$ENVIRONMENT_UUID/services" \
-            -H "Authorization: Bearer $COOLIFY_API_TOKEN")
-
-          echo "Raw API Response: $SERVICES_RESPONSE"  # Debugging output
-
-          # Check if the response is valid JSON
-          if ! echo "$SERVICES_RESPONSE" | jq empty 2>/dev/null; then
-            echo "Error: API returned invalid JSON or an error response!"
-            exit 1
-          fi
-
-          # Ensure the response is an array before filtering
-          if echo "$SERVICES_RESPONSE" | jq -e 'type=="array"' >/dev/null; then
-            SERVICE_UUID=$(echo "$SERVICES_RESPONSE" | jq -r ".[] | select(.name==\"$SERVICE_NAME\").uuid")
-          else
-            echo "Error: Expected an array but got something else."
-            exit 1
-          fi
-
-          # If no service exists, create one
-          if [[ -z "$SERVICE_UUID" || "$SERVICE_UUID" == "null" ]]; then
-            echo "Service not found. Creating a new service..."
-            SERVICE_CREATE_RESPONSE=$(curl -s -X POST "$COOLIFY_SERVER/api/v1/projects/$PROJECT_UUID/environments/$ENVIRONMENT_UUID/services" \
-              -H "Authorization: Bearer $COOLIFY_API_TOKEN" \
-              -H "Content-Type: application/json" \
-              --data '{"name": "'$SERVICE_NAME'", "type": "docker"}')
-
-            echo "Service Create Response: $SERVICE_CREATE_RESPONSE"
-
-            if ! echo "$SERVICE_CREATE_RESPONSE" | jq empty 2>/dev/null; then
-              echo "Error: Service creation failed, invalid JSON response!"
-              exit 1
-            fi
-
-            SERVICE_UUID=$(echo "$SERVICE_CREATE_RESPONSE" | jq -r '.uuid')
-
-            if [[ -z "$SERVICE_UUID" || "$SERVICE_UUID" == "null" ]]; then
-              echo "Error: Service creation failed, UUID not found!"
-              exit 1
-            fi
-          fi
-
-          echo "SERVICE_UUID=$SERVICE_UUID" >> $GITHUB_ENV
-          echo "Using service UUID: $SERVICE_UUID"
-
-      - name: Deploy Service
-        env:
-          COOLIFY_API_TOKEN: ${{ secrets.COOLIFY_API_TOKEN }}
-          COOLIFY_SERVER: "https://coolify.bot.idrakai.com"
-          PROJECT_UUID: ${{ env.PROJECT_UUID }}
-          ENVIRONMENT_UUID: ${{ env.ENVIRONMENT_UUID }}
-          SERVICE_UUID: ${{ env.SERVICE_UUID }}
-        run: |
-          DEPLOY_RESPONSE=$(curl -s -X POST "$COOLIFY_SERVER/api/v1/projects/$PROJECT_UUID/environments/$ENVIRONMENT_UUID/services/$SERVICE_UUID/deploy" \
-            -H "Authorization: Bearer $COOLIFY_API_TOKEN")
-          echo "Deployment Response: $DEPLOY_RESPONSE"
-
-      - name: Notify on Failure
-        if: failure()
-        run: echo "Deployment failed! Please check logs."
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.SERVER_IP }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            cd /var/www/arabic-test1
+            git pull origin main
+            systemctl reload nginx
